@@ -97,19 +97,20 @@ routine, but I wanted to see first how this implementation might work.
 
 =head1 VERSION
 
-Data::Pairs version 0.01
+Data::Pairs version 0.02
 
 =cut
 
 use strict;
 use warnings;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use Scalar::Util qw( reftype looks_like_number );
 use Carp;
 
-my $order;  # package global, see order() accessor
+my $order;    # package global, see order() accessor
+our $errstr;  # error message
 
 #---------------------------------------------------------------------
 
@@ -133,8 +134,34 @@ sub new {
     my( $class, $aref ) = @_;
     return bless [], $class unless $aref;
 
-    croak "\$aref must be aref" unless reftype( $aref ) eq 'ARRAY';
+    croak _errstr() unless _is_valid_pairs( $aref );
     bless $aref, $class;
+}
+
+sub _is_valid_pairs {
+    my( $aref ) = @_;
+    unless( $aref and ref( $aref ) and reftype( $aref ) eq 'ARRAY' ) {
+        $errstr = "Invalid pairs: Not an array reference";
+        return;
+    }
+    for my $href ( @$aref ) {
+        unless( ref( $href ) eq 'HASH' ) {
+            $errstr = "Invalid pairs: Not a hash reference";
+            return;
+        }
+        my @keys = keys %$href;
+        if( @keys > 1 ) {
+            $errstr = "Invalid pairs: Not a single-key hash";
+            return;
+        }
+    }
+    return 1;  # is valid
+}
+
+sub _errstr {
+    my $msg = $errstr;
+    $errstr = "";
+    $msg;  # returned
 }
 
 #---------------------------------------------------------------------

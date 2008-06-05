@@ -1,5 +1,8 @@
 Revision history for Perl extension Data::Pairs.
 
+0.02  Wed Jun  4 23:21:11 EDT 2008
+    - validate incoming structure in new()
+
 0.01  Wed Jun  4 15:12:34 2008
     - original version; created by h2xs 1.23 with options
         -AX --skip-exporter --use-new-tests -n Data::Pairs -b 5.8.0
