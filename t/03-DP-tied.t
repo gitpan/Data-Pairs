@@ -63,16 +63,8 @@ $value = $pairs{ z };
 is( $value, 26,
     "value=hash{key}" );
 
-@values = @pairs{ 'y', 'z' };
-is( "@values", "25 26",
-    "values=\@hash{key,key} (get slice)" );
-
-@pairs{ 'y', 'z' } = ( "Why", "Zee" );
-is( Dumper($pairs), "bless( [{'z' => 'Zee'},{'y' => 'Why'}], 'Data::Pairs' )",
-    "\@hash{key,key}=values (set slice)" );
-
 delete $pairs{ z };
-is( Dumper($pairs), "bless( [{'y' => 'Why'}], 'Data::Pairs' )",
+is( Dumper($pairs), "bless( [{'y' => 25}], 'Data::Pairs' )",
     "delete hash{key}" );
 
 eval { ( $key, $value ) = each %pairs; };

@@ -6,10 +6,11 @@ use Test::More 'no_plan';
 use Data::Dumper;
 $Data::Dumper::Terse=1;
 $Data::Dumper::Indent=0;
+$Data::Dumper::Sortkeys=1;
 
 BEGIN { use_ok('Data::Pairs') };
 
-my( $pairs, @values, @keys, @array, $aref, @pos );
+my( $pairs, @values, @keys, @array, $aref, %pos, $pos );
 
 $pairs = Data::Pairs->new( [ {c=>3}, {a=>1}, {b=>2}, ] );
 
@@ -28,10 +29,6 @@ is( "@keys", "c a b",
 @keys = $pairs->get_keys( qw( a b c ) );
 is( "@keys", "c a b",
     "get_keys() for selected keys, data-ordered" );
-
-@pos = $pairs->get_pos( qw( a b c ) );
-is( Dumper(\@pos), "[{'a' => 1},{'b' => 2},{'c' => 0}]",
-    "get_pos() for selected keys, parameter-ordered" );
 
 @array = $pairs->get_array();
 is( Dumper(\@array), "[{'c' => 3},{'a' => 1},{'b' => 2}]",
@@ -75,4 +72,30 @@ is( Dumper($pairs), "bless( [{'c' => 3},{'a' => 0},{'b' => 2},{'d' => 4}], 'Data
 $pairs->clear();
 is( Dumper($pairs), "bless( [], 'Data::Pairs' )",
     "clear()" );
+
+$pairs = Data::Pairs->new( [ {c=>3}, {a=>1}, {b=>2}, {a=>4} ] );
+
+$pos = $pairs->get_pos( 'c' );
+is( $pos, 0,
+    "get_pos(), key appears once" );
+
+$pos = $pairs->get_pos( 'a' );
+is( Dumper($pos), "[1,3]",
+    "get_pos(), key appears more than once" );
+
+%pos = $pairs->get_pos_hash();
+is( Dumper(\%pos), "{'a' => [1,3],'b' => [2],'c' => [0]}",
+    "get_pos_hash(), list, all" );
+
+$pos = $pairs->get_pos_hash();
+is( Dumper($pos), "{'a' => [1,3],'b' => [2],'c' => [0]}",
+    "get_pos_hash(), scalar, all" );
+
+%pos = $pairs->get_pos_hash( 'c', 'a' );
+is( Dumper(\%pos), "{'a' => [1,3],'c' => [0]}",
+    "get_pos_hash(), list, selected keys" );
+
+$pos = $pairs->get_pos_hash( 'c', 'a' );
+is( Dumper($pos), "{'a' => [1,3],'c' => [0]}",
+    "get_pos_hash(), scalar, selected keys" );
 

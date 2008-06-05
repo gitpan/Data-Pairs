@@ -1,5 +1,13 @@
 Revision history for Perl extension Data::Pairs.
 
+0.03  Thu Jun  5 12:35:40 EDT 2008
+    - added use 5.008003; (from 5.8.0) based on cpan testing
+    - changed get_pos() to work with only one key
+    - added get_pos_hash() for handling multiple keys
+    - remove "inherits from Data::Omap" from pod
+    - added SEE ALSO Tie::IxHash in pod
+    - added hash slices to list of unsupported tied features in pod
+
 0.02  Wed Jun  4 23:21:11 EDT 2008
     - validate incoming structure in new()
 

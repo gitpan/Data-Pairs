@@ -33,11 +33,12 @@ duplicate keys.
  $pairs->add( b2 => 2.5, 2 );  # there's no tied hash equivalent
  
  my $value  = $pairs{ c };
- my @slice  = @pairs{qw(c b)};  # (3, 2) (slice values are parameter-ordered)
 
- # re: keys %pairs;    # not supported, use $pairs->get_keys()
- # re: values %pairs;  # not supported, use $pairs->get_values()
- # re: each %pairs;    # not supported, use $pairs->get_keys()/get_values()
+ # keys %pairs;    # not supported, use $pairs->get_keys()
+ # values %pairs;  # not supported, use $pairs->get_values()
+ # each %pairs;    # not supported, use $pairs->get_keys()/get_values()
+ # @pairs{@array}; # slices not supported, use $pairs->get_values(@array)
+                   # or for(@array){ ... $pairs->getvalues($_) }
  
  # There are more methods/options, see below.
 
@@ -51,10 +52,10 @@ YAML tag repository:  http://yaml.org/type/pairs.html.
 The keys in Data::Pairs objects are not necessarily unique, unlike
 regular hashes.
 
-A closely related class, Data::Omap, which Data::Pairs inherits,
-implements the YAML C<!!omap> data type, http://yaml.org/type/omap.html.
-Data::Omap objects are also ordered sequences of key:value pairs but
-they do not allow duplicate keys.
+A closely related class, Data::Omap, implements the YAML C<!!omap>
+data type, http://yaml.org/type/omap.html.  Data::Omap objects are
+also ordered sequences of key:value pairs but they do not allow
+duplicate keys.
 
 While ordered mappings are in order, they are not necessarily in a
 I<particular> order, i.e., they are not necessarily sorted in any
@@ -97,14 +98,15 @@ routine, but I wanted to see first how this implementation might work.
 
 =head1 VERSION
 
-Data::Pairs version 0.02
+Data::Pairs version 0.03
 
 =cut
 
+use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use Scalar::Util qw( reftype looks_like_number );
 use Carp;
@@ -454,59 +456,93 @@ sub _add_ordered {
 
 #---------------------------------------------------------------------
 
-=head2 $pairs->get_pos( @keys );
+=head2 $pairs->get_pos( $key );
+
+Gets position(s) where a key is found.
+
+Accepts one key (any extras are silently ignored).  
+
+In list context, returns a list of positions where the keys is found.
+
+In scalar context, if the key only appears once, that position is
+returned.  If the key appears more than once, an array ref is returned,
+which contains all the positions, e.g.,
+
+ my $pairs = Data::Pairs->new( [{a=>1},{b=>2},{c=>3},{b=>4}] );
+
+ my @pos   = $pairs->get_pos( 'c' );  # (2)
+ my $pos   = $pairs->get_pos( 'c' );  # 2
+
+ @pos   = $pairs->get_pos( 'b' );  # (1, 3)
+ $pos   = $pairs->get_pos( 'b' );  # [1, 3]
+
+Returns C<()/undef> if no key given, no keys found, or object is empty.
+
+=cut
+
+sub get_pos {
+    my( $self, $wantkey ) = @_;
+    return unless $wantkey;
+    return unless @$self;
+    my @ret;
+    for my $i ( 0 .. $#$self ) {
+        my ( $key ) = keys %{$self->[ $i ]};
+        if( $key eq $wantkey ) {
+            push @ret, $i;
+        }
+    }
+    return unless @ret;
+    return @ret if wantarray;
+    return $ret[0] if @ret == 1;
+    \@ret;  # returned
+}
+
+#---------------------------------------------------------------------
+
+=head2 $pairs->get_pos_hash( @keys );
 
 Gets positions where keys are found.
 
-Accepts one or more keys.
+Accepts zero or more keys.
 
-If one key is given, returns the position or undef (if key not
-found), regardless of context, e.g.,
+In list context, returns a hash of keys/positions found.  In scalar
+context, returns a hash ref to this hash.  If no keys given, all the
+positions are mapped in the hash.  Since keys may appear more than
+once, the positions are stored as arrays.
 
- my $pairs    = Data::Pairs->new( [{a=>1},{b=>2},{c=>3}] );
- my @pos = $pairs->get_pos( 'b' );  # (1)
- my $pos = $pairs->get_pos( 'b' );  # 1
+ my $pairs    = Data::Pairs->new( [{a=>1},{b=>2},{c=>3},{b=>4}] );
+ my %pos      = $pairs->get_pos_hash( 'c', 'b' );  # %pos      is (b=>[1,3],c=>[2])
+ my $pos_href = $pairs->get_pos_hash( 'c', 'b' );  # $pos_href is {b=>[1,3],c=>[2]}
 
-If multiple keys, returns a list of hash refs in list context, the
-number of keys found in scalar context.  The positions are listed in
-the order that the keys were given (rather than in numerical order),
-e.g.,
-
- @pos        = $pairs->get_pos( 'c', 'b' ); # @pos is ({c=>2},{b=>1})
- my $howmany = $pairs->get_pos( 'A', 'b', 'c' );  # $howmany is 2
+If a given key is not found, it will not appear in the returned hash.
 
 Returns C<undef/()> if no keys given or object is empty.
 
 =cut
 
-sub get_pos {
+sub get_pos_hash {
     my( $self, @keys ) = @_;
-    return unless @keys;
     return unless @$self;
-    if( @keys == 1 ) {
-        my $wantkey = $keys[0];
-        for my $i ( 0 .. $#$self ) {
-            my ( $key ) = keys %{$self->[ $i ]};
-            if( $key eq $wantkey ) {
-                return $i;
-            }
-        }
-        return;  # key not found
-    }
-    else {
-        my( %ret, @ret );
+    my %ret;
+    if( @keys ) {
         for my $i ( 0 .. $#$self ) {
             my ( $key ) = keys %{$self->[ $i ]};
             for ( @keys ) {
                 if( $key eq $_ ) {
-                    $ret{ $key } = { $key => $i };
+                    push @{$ret{ $key }}, $i;
                     last;
                 }
             }
         }
-        @ret = grep defined, @ret{ @keys };  # keys-order
-        return @ret;
     }
+    else {
+        for my $i ( 0 .. $#$self ) {
+            my ( $key ) = keys %{$self->[ $i ]};
+            push @{$ret{ $key }}, $i;
+        }
+    }
+    return %ret if wantarray;
+    \%ret;  # returned
 }
 
 #---------------------------------------------------------------------
@@ -820,4 +856,41 @@ sub SCALAR {
 1;  # 'use module' return value
 
 __END__
+
+=head1 SEE ALSO
+
+Data::Omap
+
+=over 8
+
+The code in Data::Omap is the basis for that in the Data::Pairs
+module.  Data::Omap also operates on an ordered hash, but does not
+allow duplicate keys.
+
+=back
+
+Tie::IxHash
+
+=over 8
+
+Use Tie::IxHash if what you need is an ordered hash in general.  The
+Data::Pairs module does repeat many of Tie::IxHash's features.  What
+differs is that it operates directly on a specific type of data
+structure, and allows duplicate keys.
+
+=back
+
+=head1 AUTHOR
+
+Brad Baxter, E<lt>bmb@galib.uga.eduE<gt>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2008 by Brad Baxter
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.8 or,
+at your option, any later version of Perl 5 you may have available.
+
+=cut
 

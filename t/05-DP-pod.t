@@ -6,6 +6,7 @@ use Test::More 'no_plan';
 use Data::Dumper;
 $Data::Dumper::Terse=1;
 $Data::Dumper::Indent=0;
+$Data::Dumper::Sortkeys=1;
 
 BEGIN { use_ok('Data::Pairs') };
 
@@ -66,7 +67,7 @@ SYNOPSIS_tied: {
  
 =pod
 
- # Tied style
+# Tied style
  
  my %pairs;
  # recommend saving an object reference, too.
@@ -76,16 +77,16 @@ SYNOPSIS_tied: {
  $pairs->add( b2 => 2.5, 2 );  # there's no tied hash equivalent
  
  my $value  = $pairs{ c };
- my @slice  = @pairs{qw(c b)};  # (3, 2) (slice values are parameter-ordered)
 
- # re: keys %pairs;    # not supported, use $pairs->get_keys()
- # re: values %pairs;  # not supported, use $pairs->get_values()
- # re: each %pairs;    # not supported, use $pairs->get_keys()/get_values()
+ # keys %pairs;    # not supported, use $pairs->get_keys()
+ # values %pairs;  # not supported, use $pairs->get_values()
+ # each %pairs;    # not supported, use $pairs->get_keys()/get_values()
+ # @pairs{@array}; # slices not supported, use $pairs->get_values(@array)
+                   # or for(@array){ ... $pairs->getvalues($_) }
  
  # There are more methods/options, see below.
 
 =cut
-     # Tied style
  
  my %pairs;
  my $pairs = tie %pairs, 'Data::Pairs', [{a=>1},{b=>2},{c=>3},{b=>4}];
@@ -96,7 +97,7 @@ is( Dumper($pairs), "bless( [{'a' => 1},{'b' => 2},{'c' => 3},{'b' => 4}], 'Data
  $pairs{ a } = 0;
 
 is( Dumper($pairs), "bless( [{'a' => 0},{'b' => 2},{'c' => 3},{'b' => 4}], 'Data::Pairs' )",
-    "$pairs{ a } = 0" );
+    "\$pairs{ a } = 0" );
  
  $pairs->add( b2 => 2.5, 2 );  # there's no tied hash equivalent
  
@@ -106,10 +107,6 @@ is( Dumper($pairs), "bless( [{'a' => 0},{'b' => 2},{'b2' => '2.5'},{'c' => 3},{'
  my $value  = $pairs{ c };
 
 is( $value, 3, "\$pairs{ c }" );
-
- my @slice  = @pairs{qw(c b)};  # (3, 2) (slice values are parameter-ordered)
-
-is( "@slice", "3 2", "\@pairs{qw(c b)}" );
 
 }
 
@@ -372,58 +369,97 @@ is( Dumper($pairs), "bless( [{'a' => 1},{'c' => 3},{'b' => 2}], 'Data::Pairs' )"
 }
 
 OBJECT_get_pos: {
-
 #---------------------------------------------------------------------
 
-=head2 $pairs->get_pos( @keys );
+=head2 $pairs->get_pos( $key );
+
+Gets position(s) where a key is found.
+
+Accepts one key (any extras are silently ignored).  
+
+In list context, returns a list of positions where the keys is found.
+
+In scalar context, if the key only appears once, that position is
+returned.  If the key appears more than once, an array ref is returned,
+which contains all the positions, e.g.,
+
+ my $pairs = Data::Pairs->new( [{a=>1},{b=>2},{c=>3},{b=>4}] );
+
+ my @pos   = $pairs->get_pos( 'c' );  # (2)
+ my $pos   = $pairs->get_pos( 'c' );  # 2
+
+ @pos   = $pairs->get_pos( 'b' );  # (1, 3)
+ $pos   = $pairs->get_pos( 'b' );  # [1, 3]
+
+Returns C<()/undef> if no key given, no keys found, or object is empty.
+
+=cut
+
+ my $pairs = Data::Pairs->new( [{a=>1},{b=>2},{c=>3},{b=>4}] );
+
+is( Dumper($pairs), "bless( [{'a' => 1},{'b' => 2},{'c' => 3},{'b' => 4}], 'Data::Pairs' )",
+    "new()" );
+
+ my @pos   = $pairs->get_pos( 'c' );  # (2)
+
+is( "@pos", 2,
+    "get_pos( 'c' ), list" );
+
+ my $pos   = $pairs->get_pos( 'c' );  # 2
+
+is( $pos, 2,
+    "get_pos( 'c' ), scalar" );
+
+ @pos   = $pairs->get_pos( 'b' );  # (1, 3)
+
+is( "@pos", "1 3",
+    "get_pos( 'b' ), list, duplicate key" );
+
+ $pos   = $pairs->get_pos( 'b' );  # [1, 3]
+
+is( Dumper($pos), "[1,3]",
+    "get_pos( 'b' ), scalar, duplicate key" );
+
+}
+
+OBJECT_get_pos_hash: {
+#---------------------------------------------------------------------
+
+=head2 $pairs->get_pos_hash( @keys );
 
 Gets positions where keys are found.
 
-Accepts one or more keys.
+Accepts zero or more keys.
 
-If one key is given, returns the position or undef (if key not
-found), regardless of context, e.g.,
+In list context, returns a hash of keys/positions found.  In scalar
+context, returns a hash ref to this hash.  If no keys given, all the
+positions are mapped in the hash.  Since keys may appear more than
+once, the positions are stored as arrays.
 
- my $pairs    = Data::Pairs->new( [{a=>1},{b=>2},{c=>3}] );
- my @pos = $pairs->get_pos( 'b' );  # (1)
- my $pos = $pairs->get_pos( 'b' );  # 1
+ my $pairs    = Data::Pairs->new( [{a=>1},{b=>2},{c=>3},{b=>4}] );
+ my %pos      = $pairs->get_pos_hash( 'c', 'b' );  # %pos      is (b=>[1,3],c=>[2])
+ my $pos_href = $pairs->get_pos_hash( 'c', 'b' );  # $pos_href is {b=>[1,3],c=>[2]}
 
-If multiple keys, returns a list of hash refs in list context, the
-number of keys found in scalar context.  The positions are listed in
-the order that the keys were given (rather than in numerical order),
-e.g.,
-
- @pos        = $pairs->get_pos( 'c', 'b' ); # @pos is ({c=>2},{b=>1})
- my $howmany = $pairs->get_pos( 'A', 'b', 'c' );  # $howmany is 2
+If a given key is not found, it will not appear in the returned hash.
 
 Returns C<undef/()> if no keys given or object is empty.
 
 =cut
 
- my $pairs    = Data::Pairs->new( [{a=>1},{b=>2},{c=>3}] );
+ my $pairs    = Data::Pairs->new( [{a=>1},{b=>2},{c=>3},{b=>4}] );
 
-is( Dumper($pairs), "bless( [{'a' => 1},{'b' => 2},{'c' => 3}], 'Data::Pairs' )",
+is( Dumper($pairs), "bless( [{'a' => 1},{'b' => 2},{'c' => 3},{'b' => 4}], 'Data::Pairs' )",
     "new()" );
 
- my @pos = $pairs->get_pos( 'b' );  # (1)
+ my %pos      = $pairs->get_pos_hash( 'c', 'b' );  # %pos      is (b=>[1,3],c=>[2])
 
-is( "@pos", 1,
-    "get_pos( 'b' ), list" );
+is( Dumper(\%pos), "{'b' => [1,3],'c' => [2]}",
+    "get_pos_hash( 'c', 'b' ), list" );
 
- my $pos = $pairs->get_pos( 'b' );  # 1
+ my $pos_href = $pairs->get_pos_hash( 'c', 'b' );  # $pos_href is {b=>[1,3],c=>[2]}
 
-is( $pos, 1,
-    "get_pos( 'b' ), scalar" );
-
- @pos        = $pairs->get_pos( 'c', 'b' ); # @pos is ({c=>2},{b=>1})
-
-is( Dumper(\@pos), "[{'c' => 2},{'b' => 1}]",
-    "get_pos( 'c', 'b' ), list" );
-
- my $howmany = $pairs->get_pos( 'A', 'b', 'c' );  # $howmany is 2
-
-is( $howmany, 2,
-    "get_pos( 'A', 'b', 'c' ), scalar" );
+is( Dumper($pos_href), "{'b' => [1,3],'c' => [2]}",
+    "get_pos_hash( 'c', 'b' ), scalar" );
 
 }
 
