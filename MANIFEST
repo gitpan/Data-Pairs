@@ -1,0 +1,11 @@
+Changes
+Makefile.PL
+MANIFEST
+README
+t/01-DP-simple.t
+t/02-DP-ordering.t
+t/03-DP-tied.t
+t/04-DP-tied_ordering.t
+t/05-DP-pod.t
+lib/Data/Pairs.pm
+META.yml                                 Module meta-data (added by MakeMaker)
