@@ -67,7 +67,7 @@ is( $pairs->exists('B'), '',
 
 $pairs->delete('A');
 is( Dumper($pairs), "bless( [{'c' => 3},{'a' => 0},{'b' => 2},{'d' => 4}], 'Data::Pairs' )",
-    "delete()" );
+    "delete(), single key" );
 
 $pairs->clear();
 is( Dumper($pairs), "bless( [], 'Data::Pairs' )",
@@ -98,4 +98,8 @@ is( Dumper(\%pos), "{'a' => [1,3],'c' => [0]}",
 $pos = $pairs->get_pos_hash( 'c', 'a' );
 is( Dumper($pos), "{'a' => [1,3],'c' => [0]}",
     "get_pos_hash(), scalar, selected keys" );
+
+$pairs->delete( a => 3 );
+is( Dumper($pairs), "bless( [{'c' => 3},{'a' => 1},{'b' => 2}], 'Data::Pairs' )",
+    "delete(), at position" );
 

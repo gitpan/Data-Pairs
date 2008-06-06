@@ -1,5 +1,9 @@
 Revision history for Perl extension Data::Pairs.
 
+0.04  Fri Jun  6 08:38:49 EDT 2008
+    - fixed typos in pod
+    - added pos parameter to delete()
+
 0.03  Thu Jun  5 12:35:40 EDT 2008
     - added use 5.008003; (from 5.8.0) based on cpan testing
     - changed get_pos() to work with only one key

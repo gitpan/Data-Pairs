@@ -54,7 +54,7 @@ regular hashes.
 
 A closely related class, Data::Omap, implements the YAML C<!!omap>
 data type, http://yaml.org/type/omap.html.  Data::Omap objects are
-also ordered sequences of key:value pairs but they do not allow
+also ordered sequences of key/value pairs but they do not allow
 duplicate keys.
 
 While ordered mappings are in order, they are not necessarily in a
@@ -77,7 +77,7 @@ Normally, the underlying structure of an OO object is encapsulated
 and not directly accessible (when you play nice). One key
 implementation detail of Data::Pairs is the desire that the underlying
 ordered mapping data structure (an array of single-key hashes) be
-publically maintained as such and directly accessible, if desired.
+publically maintained as such and directly accessible if desired.
 
 To that end, no attributes but the data itself are stored in the
 objects.  In the current version, that is why C<order()> is a class
@@ -98,7 +98,7 @@ routine, but I wanted to see first how this implementation might work.
 
 =head1 VERSION
 
-Data::Pairs version 0.03
+Data::Pairs version 0.04
 
 =cut
 
@@ -106,7 +106,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 use Scalar::Util qw( reftype looks_like_number );
 use Carp;
@@ -188,7 +188,7 @@ Otherwise, accepts the predefined orderings: 'na', 'nd', 'sa', 'sd',
 'sna', and 'snd', or a custom code reference, e.g.
 
  Data::Pairs->order( 'na' );   # numeric ascending
- Data::Pairs->order( 'nd' );   # numeric ascending
+ Data::Pairs->order( 'nd' );   # numeric descending
  Data::Pairs->order( 'sa' );   # string  ascending
  Data::Pairs->order( 'sd' );   # string  descending
  Data::Pairs->order( 'sna' );  # string/numeric ascending
@@ -209,7 +209,7 @@ Returns the code reference if ordering is ON, a false value if OFF.
 
 Note, when object-level ordering is implemented, it is expected that
 the class-level option will still be available.  In that case, any
-new objects will inherite the class-level ordering unless overridden
+new objects will inherit the class-level ordering unless overridden
 at the object level.
 
 =cut
@@ -305,7 +305,7 @@ Get a value or values.
 Regardless of parameters, if the object is empty, undef is returned in
 scalar context, an empty list in list context.
 
-If no paramaters, gets all the values.  In scalar context, gives
+If no parameters, gets all the values.  In scalar context, gives
 number of values in the object.
 
  my $pairs = Data::Pairs->new( [{a=>1},{b=>2},{c=>3},{b=>4},{b=>5}] );
@@ -413,15 +413,13 @@ sub add {
 
 =head2 $pairs->_add_ordered( $key => $value );
 
-Private routine used by C<set()> and C<add()>.
+Private routine used by C<set()> and C<add()>; should not be called
+directly.
 
 Accepts C<$key> and C<$value>.
 
 Adds a new key/value pair to the end or merged according to the
 defined C<order()>.
-
-This routine should not be called directly, because it does not
-check for duplicates.
 
 Has no defined return value.
 
@@ -462,7 +460,7 @@ Gets position(s) where a key is found.
 
 Accepts one key (any extras are silently ignored).  
 
-In list context, returns a list of positions where the keys is found.
+In list context, returns a list of positions where the key is found.
 
 In scalar context, if the key only appears once, that position is
 returned.  If the key appears more than once, an array ref is returned,
@@ -499,7 +497,7 @@ sub get_pos {
 
 #---------------------------------------------------------------------
 
-=head2 $pairs->get_pos_hash( @keys );
+=head2 $pairs->get_pos_hash( [@keys] );
 
 Gets positions where keys are found.
 
@@ -516,7 +514,7 @@ once, the positions are stored as arrays.
 
 If a given key is not found, it will not appear in the returned hash.
 
-Returns C<undef/()> if no keys given or object is empty.
+Returns C<undef/()> if object is empty.
 
 =cut
 
@@ -547,7 +545,7 @@ sub get_pos_hash {
 
 #---------------------------------------------------------------------
 
-=head2 $pairs->get_keys( @keys );
+=head2 $pairs->get_keys( [@keys] );
 
 Gets keys.
 
@@ -594,7 +592,7 @@ sub get_keys {
 
 #---------------------------------------------------------------------
 
-=head2 $pairs->get_array( @keys );
+=head2 $pairs->get_array( [@keys] );
 
 Gets an array of key/value pairs.
 
@@ -695,30 +693,41 @@ sub exists {
 
 #---------------------------------------------------------------------
 
-=head2 $pairs->delete( $key );
+=head2 $pairs->delete( $key[, $pos] );
 
-Accepts one key.  If key is found, removes the I<first> matching
-key/value pair from the object.  Must be repeated in a loop to delete
-all occurrences of the key from the object.
+Accepts one key and an optional position.
+
+If C<$pos> is given and the key at that position equals C<$key>, that
+key/value pair will be deleted.  Otherwise, the I<first> key/value
+pair that matches C<$key> will be deleted.
+
+If C<$key> occurs multiple times, C<delete()> must be called multiple
+times to delete them all.
 
 Returns the value from the deleted pair.
 
 This routine supports the tied hash DELETE method, but may be called
-directly, too.
+directly, too.  C<$pos> is not passed in the tied hash implementation,
+so the first matching key/value pair will be deleted in every case.
 
 =cut
 
 sub delete {
-    my( $self, $key ) = @_;
+    my( $self, $key, $pos ) = @_;
     return unless defined $key;
     return unless @$self;
 
-    my $found = $self->get_pos( $key );
-    return unless defined $found;
+    if( defined $pos ) {
+        my( $foundkey ) = keys %{$self->[ $pos ]};
+        return unless $foundkey eq $key;
+    }
+    else {
+        $pos = $self->get_pos( $key );
+        return unless defined $pos;
+    }
 
-    my $value = $self->[ $found ]->{ $key };
-    splice @$self, $found, 1;  # delete it
-
+    my $value = $self->[ $pos ]{ $key };
+    splice @$self, $pos, 1;  # delete it
     $value;  # returned
 }
 
@@ -829,7 +838,7 @@ sub NEXTKEY {
 #---------------------------------------------------------------------
 # SCALAR this
 # This is called when the hash is evaluated in scalar context.
-# In order to mimic the behaviour of untied hashes, this method should
+# In order to mimic the behavior of untied hashes, this method should
 # return a false value when the tied hash is considered empty.
 
 sub SCALAR {
@@ -882,7 +891,7 @@ structure, and allows duplicate keys.
 
 =head1 AUTHOR
 
-Brad Baxter, E<lt>bmb@galib.uga.eduE<gt>
+Brad Baxter, E<lt>bbaxter@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
