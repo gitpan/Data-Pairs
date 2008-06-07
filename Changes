@@ -1,5 +1,8 @@
 Revision history for Perl extension Data::Pairs.
 
+0.05  Sat Jun  7 07:35:18 EDT 2008
+    - croak if pos too large in set() and add()
+
 0.04  Fri Jun  6 08:38:49 EDT 2008
     - fixed typos in pod
     - added pos parameter to delete()

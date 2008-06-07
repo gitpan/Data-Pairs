@@ -98,7 +98,7 @@ routine, but I wanted to see first how this implementation might work.
 
 =head1 VERSION
 
-Data::Pairs version 0.04
+Data::Pairs version 0.05
 
 =cut
 
@@ -106,7 +106,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 use Scalar::Util qw( reftype looks_like_number );
 use Carp;
@@ -284,14 +284,16 @@ sub set {
     # undef def   -> set key/value at found
     # undef undef -> add key/value (according to order)
 
-    my $found = $self->get_pos( $key );
     my $elem = { $key => $value };
+    if( defined $pos )   {
+        croak "\$pos($pos) too large" if $pos > $#$self+1;
+        $self->[ $pos ] = $elem;
+        return $value;
+    }
 
-    if( defined $pos and defined $found )
-                            { $self->[ $pos ]   = $elem }
-    elsif( defined $pos )   { $self->[ $pos ]   = $elem }
-    elsif( defined $found ) { $self->[ $found ] = $elem }
-    else                    { $self->_add_ordered( $key, $value ) }
+    my $found = $self->get_pos( $key );
+    if( defined $found ) { $self->[ $found ] = $elem }
+    else                 { $self->_add_ordered( $key, $value ) }
 
     $value;  # returned
 }
@@ -403,8 +405,13 @@ sub add {
     return unless defined $key;
 
     my $elem = { $key => $value };
-    if( defined $pos ) { splice @$self, $pos, 0, $elem }
-    else               { $self->_add_ordered( $key, $value ) }
+    if( defined $pos ) {
+        croak "\$pos($pos) too large" if $pos > $#$self+1;
+        splice @$self, $pos, 0, $elem;
+    }
+    else {
+        $self->_add_ordered( $key, $value );
+    }
 
     $value;  # returned
 }
