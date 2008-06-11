@@ -23,9 +23,10 @@ SYNOPSIS_simple: {
  $pairs->set( a => 0 );
  $pairs->add( b2 => 2.5, 2 );  # insert at position 2 (between b and c)
  
- my $value  = $pairs->get_values( 'c' );    # 3
+ my($value) = $pairs->get_values( 'c' );    # 3      (if you just want one)
+ my @values = $pairs->get_values( 'b' );    # (2, 4) (one key, multiple values)
  my @keys   = $pairs->get_keys();           # (a, b, b2, c, b)
- my @values = $pairs->get_values();         # (0, 2, 2.5, 3, 4)
+    @values = $pairs->get_values();         # (0, 2, 2.5, 3, 4)
  my @subset = $pairs->get_values(qw(c b));  # (2, 3, 4) (values are data-ordered)
  
 =cut
@@ -45,15 +46,19 @@ is( Dumper($pairs), "bless( [{'a' => 0},{'b' => 2},{'c' => 3},{'b' => 4}], 'Data
 is( Dumper($pairs), "bless( [{'a' => 0},{'b' => 2},{'b2' => '2.5'},{'c' => 3},{'b' => 4}], 'Data::Pairs' )",
     "add( b2 => 2.5, 2 )" );
 
- my $value  = $pairs->get_values( 'c' );    # 3
+ my($value) = $pairs->get_values( 'c' );    # 3      (if you just want one)
 
 is( $value, 3, "get_values( 'c' )" );
+
+ my @values = $pairs->get_values( 'b' );    # (2, 4) (one key, multiple values)
+
+is( "@values", "2 4", "get_values( 'b' )" );
 
  my @keys   = $pairs->get_keys();           # (a, b, b2, c, b)
 
 is( "@keys", "a b b2 c b", "get_keys()" );
 
- my @values = $pairs->get_values();         # (0, 2, 2.5, 3, 4)
+    @values = $pairs->get_values();         # (0, 2, 2.5, 3, 4)
 
 is( "@values", "0 2 2.5 3 4", "get_values()" );
 
@@ -63,50 +68,67 @@ is( "@subset", "2 3 4", "get_values(qw(c b ))" );
 
 }
 
-SYNOPSIS_tied: {
+SYNOPSIS_nonoo: {
  
 =pod
 
-# Tied style
- 
- my %pairs;
- # recommend saving an object reference, too.
- my $pairs = tie %pairs, 'Data::Pairs', [{a=>1},{b=>2},{c=>3},{b=>4}];
- 
- $pairs{ a } = 0;
- $pairs->add( b2 => 2.5, 2 );  # there's no tied hash equivalent
- 
- my $value  = $pairs{ c };
+ # Non-OO style
 
- # keys %pairs;    # not supported, use $pairs->get_keys()
- # values %pairs;  # not supported, use $pairs->get_values()
- # each %pairs;    # not supported, use $pairs->get_keys()/get_values()
- # @pairs{@array}; # slices not supported, use $pairs->get_values(@array)
-                   # or for(@array){ ... $pairs->getvalues($_) }
+ use Data::Pairs ':ALL';
+ 
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4}];  # new-ish, but not blessed
+
+ pairs_set( $pairs, a => 0 );        # (pass pairs as first parameter)
+ pairs_add( $pairs, b2 => 2.5, 2 );  # insert at position 2 (between b and c)
+ 
+ my($value) = pairs_get_values( $pairs, 'c' );      # 3      (if you just want one)
+ my @values = pairs_get_values( $pairs, 'b' );      # (2, 4) (one key, multiple values)
+ my @keys   = pairs_get_keys( $pairs );             # (a, b, b2, c, b)
+    @values = pairs_get_values( $pairs );           # (0, 2, 2.5, 3, 4)
+ my @subset = pairs_get_values( $pairs, qw(c b) );  # (2, 3, 4) (values are data-ordered)
  
  # There are more methods/options, see below.
 
 =cut
  
- my %pairs;
- my $pairs = tie %pairs, 'Data::Pairs', [{a=>1},{b=>2},{c=>3},{b=>4}];
- 
-is( Dumper($pairs), "bless( [{'a' => 1},{'b' => 2},{'c' => 3},{'b' => 4}], 'Data::Pairs' )",
-    "tie %pairs" );
- 
- $pairs{ a } = 0;
+ use Data::Omap ':ALL';
 
-is( Dumper($pairs), "bless( [{'a' => 0},{'b' => 2},{'c' => 3},{'b' => 4}], 'Data::Pairs' )",
-    "\$pairs{ a } = 0" );
- 
- $pairs->add( b2 => 2.5, 2 );  # there's no tied hash equivalent
- 
-is( Dumper($pairs), "bless( [{'a' => 0},{'b' => 2},{'b2' => '2.5'},{'c' => 3},{'b' => 4}], 'Data::Pairs' )",
-    "add( b2 => 2.5, 2 )" );
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4}];  # new-ish, but not blessed
 
- my $value  = $pairs{ c };
+ pairs_set( $pairs, a => 0 );        # (pass pairs as first parameter)
 
-is( $value, 3, "\$pairs{ c }" );
+is( Dumper($pairs), "[{'a' => 0},{'b' => 2},{'c' => 3},{'b' => 4}]",
+    "pairs_set( ... a => 0 )" );
+
+ pairs_add( $pairs, b2 => 2.5, 2 );  # insert at position 2 (between b and c)
+ 
+is( Dumper($pairs), "[{'a' => 0},{'b' => 2},{'b2' => '2.5'},{'c' => 3},{'b' => 4}]",
+    "pairs_add( ... b2 => 2.5, 2 )" );
+
+ my($value) = pairs_get_values( $pairs, 'c' );      # 3      (if you just want one)
+
+is( $value, 3,
+    "pairs_get_values( ... 'c' )" );
+
+ my @values = pairs_get_values( $pairs, 'b' );      # (2, 4) (one key, multiple values)
+
+is( "@values", "2 4",
+    "pairs_get_values( ... 'b' )" );
+
+ my @keys   = pairs_get_keys( $pairs );             # (a, b, b2, c, b)
+
+is( "@keys", "a b b2 c b",
+    "pairs_get_keys()" );
+
+    @values = pairs_get_values( $pairs );           # (0, 2, 2.5, 3, 4)
+
+is( "@values", "0 2 2.5 3 4",
+    "pairs_get_values()" );
+
+ my @subset = pairs_get_values( $pairs, qw(c b) );  # (2, 3, 4) (values are data-ordered)
+
+is( "@subset", "2 3 4",
+    "pairs_get_values( ... qw(c b) )" );
 
 }
 
@@ -277,7 +299,7 @@ number of values in the object.
  my @values  = $pairs->get_values();  # (1, 2, 3, 4, 5)
  my $howmany = $pairs->get_values();  # 5
 
-If multiple keys given, their values are returned in the order found
+If keys given, their values are returned in the order found
 in the object, not the order of the given keys.
 
 In scalar context, gives the number of values found, e.g.,
@@ -285,14 +307,15 @@ In scalar context, gives the number of values found, e.g.,
  @values  = $pairs->get_values( 'c', 'b' );  # (2, 3, 4, 5)
  $howmany = $pairs->get_values( 'c', 'b' );  # 4
 
-If only one key is given, I<first> value found for that key is
-returned in scalar context, all the values in list context.
+Note, unlike C<Data::Omap::get_values()>, because an object may have
+duplicate keys, this method behaves the same if given one key or
+many, e.g.,
 
- @values   = $pairs->get_values( 'b' );  # (2, 4, 5)
- my $value = $pairs->get_values( 'b' );  # 2
+ @values  = $pairs->get_values( 'b' );  # (2, 4, 5)
+ $howmany = $pairs->get_values( 'b' );  # 3
 
-Note, if you don't know if a key will have more than value, calling
-C<get_values()> in list context will ensure you get them all.
+Therefore, always call C<get_values()> in list context to get one
+or more values.
 
 =cut
 
@@ -321,14 +344,14 @@ is( "@values", "2 3 4 5",
 is( $howmany, 4,
     "get_values( 'c', 'b' ), scalar" );
 
- @values   = $pairs->get_values( 'b' );  # (2, 4, 5)
+ @values  = $pairs->get_values( 'b' );  # (2, 4, 5)
 
 is( "@values", "2 4 5",
     "get_values( 'b' ), list" );
 
- my $value = $pairs->get_values( 'b' );  # 2
+ $howmany = $pairs->get_values( 'b' );  # 3
 
-is( $value, 2,
+is( $howmany, 3,
     "get_values( 'b' ), scalar" );
 
 }
@@ -564,6 +587,286 @@ is( Dumper(\@array), "[{'b' => 2},{'c' => 3}]",
 
 is( Dumper($aref), "[{'b' => 2},{'c' => 3}]",
     "get_array( 'c', 'b', 'A' ), scalar" );
+
+}
+
+NONOO: {
+
+=head2 Exporting
+
+Nothing is exported by default.  All subroutines may be exported
+using C<:ALL>, e.g.,
+
+ use Data::Pairs ':ALL';
+
+They are shown below.
+
+A subset may be exported using C<:STD>, e.g.,
+
+ use Data::Pairs ':STD';
+
+This subset includes
+C<pairs_set()>
+C<pairs_get_values()>
+C<pairs_get_keys()>
+C<pairs_exists()>
+C<pairs_delete()>
+C<pairs_clear()>
+
+=cut
+
+BEGIN{ use_ok( 'Data::Pairs', ':STD' ); }
+BEGIN{ use_ok( 'Data::Pairs', ':ALL' ); } # last so we have all below
+
+use Data::Dumper;
+$Data::Dumper::Terse=1;
+$Data::Dumper::Indent=0;
+$Data::Dumper::Sortkeys=1;
+
+=head2 C<new> without C<new()>
+
+To create a pairs ordered mapping from scratch, simply assign an
+empty array ref, e.g.,
+
+ my $pairs = [];
+
+=cut
+
+{
+ my $pairs = [];
+is( Dumper($pairs), "[]",
+    "new without new()" );
+}
+
+=head2 pairs_set( $pairs, $key => $value[, $pos] );
+
+(See C<< $pairs->set() >> above.)
+
+ my $pairs = [{a=>1},{b=>2}];
+ pairs_set( $pairs, c => 3, 0 );  # pairs is now [{c=>3},{b=>2}]
+
+=cut
+
+{
+ my $pairs = [{a=>1},{b=>2}];
+ pairs_set( $pairs, c => 3, 0 );  # pairs is now [{c=>3},{b=>2}]
+is( Dumper($pairs), "[{'c' => 3},{'b' => 2}]",
+    "pairs_set()" );
+}
+
+=head2 pairs_get_values( $pairs[, $key[, @keys]] );
+
+(See C<< $pairs->get_values() >> above.)
+
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4},{b=>5}];
+ my @values  = pairs_get_values( $pairs );  # (1, 2, 3, 4, 5)
+ my $howmany = pairs_get_values( $pairs );  # 5
+ 
+ @values  = pairs_get_values( $pairs, 'c', 'b' );  # (2, 3, 4, 5)
+ $howmany = pairs_get_values( $pairs, 'c', 'b' );  # 4
+
+ @values  = pairs_get_values( $pairs, 'b' );  # (2, 4, 5)
+ $howmany = pairs_get_values( $pairs, 'b' );  # 3
+ 
+=cut
+
+{
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4},{b=>5}];
+ my @values  = pairs_get_values( $pairs );  # (1, 2, 3, 4, 5)
+ my $howmany = pairs_get_values( $pairs );  # 5
+
+is( "@values", "1 2 3 4 5",
+    "pairs_get_values(), no parm, list" );
+is( $howmany, 5,
+    "pairs_get_values(), no parm, scalar" );
+ 
+ @values  = pairs_get_values( $pairs, 'c', 'b' );  # (2, 3, 4, 5)
+ $howmany = pairs_get_values( $pairs, 'c', 'b' );  # 4
+
+is( "@values", "2 3 4 5",
+    "pairs_get_values(), multi-parm, list" );
+is( $howmany, 4,
+    "pairs_get_values(), multi-parm, scalar" );
+
+ @values  = pairs_get_values( $pairs, 'b' );  # (2, 4, 5)
+ $howmany = pairs_get_values( $pairs, 'b' );  # 3
+ 
+is( "@values", "2 4 5",
+    "pairs_get_values(), single parm, list" );
+is( $howmany, 3,
+    "pairs_get_values(), single parm, scalar (same as multi-parm" );
+ 
+}
+
+=head2 pairs_add( $pairs, $key => $value[, $pos] );
+
+(See C<< $pairs->add() >> above.)
+
+ my $pairs = [{a=>1},{b=>2}];
+ pairs_add( $pairs, c => 3, 1 );  # pairs is now [{a=>1},{c=>3},{b=>2}]
+
+=cut
+
+{
+ my $pairs = [{a=>1},{b=>2}];
+ pairs_add( $pairs, c => 3, 1 );  # pairs is now [{a=>1},{c=>3},{b=>2}]
+is( Dumper($pairs), "[{'a' => 1},{'c' => 3},{'b' => 2}]",
+    "pairs_add()" );
+}
+
+=head2 pairs_get_pos( $pairs, $key );
+
+(See C<< $pairs->get_pos() >> above.)
+
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4}];
+ my @pos   = pairs_get_pos( $pairs, 'c' );  # (2)
+ my $pos   = pairs_get_pos( $pairs, 'c' );  # 2
+ @pos   = pairs_get_pos( $pairs, 'b' );  # (1, 3)
+ $pos   = pairs_get_pos( $pairs, 'b' );  # [1, 3]
+
+=cut
+
+{
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4}];
+ my @pos   = pairs_get_pos( $pairs, 'c' );  # (2)
+ my $pos   = pairs_get_pos( $pairs, 'c' );  # 2
+
+is( "@pos", 2,
+    "pairs_get_pos, list" );
+is( $pos, 2,
+    "pairs_get_pos, scalar" );
+
+ @pos   = pairs_get_pos( $pairs, 'b' );  # (1, 3)
+ $pos   = pairs_get_pos( $pairs, 'b' );  # [1, 3]
+
+is( "@pos", "1 3",
+    "pairs_get_pos, list" );
+is( Dumper($pos), "[1,3]",
+    "pairs_get_pos, scalar" );
+}
+
+=head2 pairs_get_pos_hash( $pairs[, @keys] );
+
+(See C<< $pairs->get_pos_hash() >> above.)
+
+ my $pairs    = [{a=>1},{b=>2},{c=>3},{b=>4}];
+ my %pos      = pairs_get_pos_hash( $pairs, 'c', 'b' );  # %pos      is (b=>[1,3],c=>[2])
+ my $pos_href = pairs_get_pos_hash( $pairs, 'c', 'b' );  # $pos_href is {b=>[1,3],c=>[2]}
+
+=cut
+
+{
+ my $pairs    = [{a=>1},{b=>2},{c=>3},{b=>4}];
+ my %pos      = pairs_get_pos_hash( $pairs, 'c', 'b' );  # %pos      is (b=>[1,3],c=>[2])
+ my $pos_href = pairs_get_pos_hash( $pairs, 'c', 'b' );  # $pos_href is {b=>[1,3],c=>[2]}
+
+is( Dumper(\%pos), "{'b' => [1,3],'c' => [2]}",
+    "pairs_get_pos_hash(), list" );
+is( Dumper($pos_href), "{'b' => [1,3],'c' => [2]}",
+    "pairs_get_pos_hash(), scalar" );
+}
+
+=head2 pairs_get_keys( $pairs[, @keys] );
+
+(See C<< $pairs->get_keys() >> above.)
+
+ my $pairs    = [{a=>1},{b=>2},{c=>3},{b=>4},{b=>5}];
+ my @keys    = pairs_get_keys( $pairs );  # @keys is (a, b, c, b, b)
+ my $howmany = pairs_get_keys( $pairs );  # $howmany is 5
+
+ @keys    = pairs_get_keys( $pairs, 'c', 'b', 'A' );  # @keys is (b, c, b, b)
+ $howmany = pairs_get_keys( $pairs, 'c', 'b', 'A' );  # $howmany is 4
+
+=cut
+
+{
+ my $pairs    = [{a=>1},{b=>2},{c=>3},{b=>4},{b=>5}];
+ my @keys    = pairs_get_keys( $pairs );  # @keys is (a, b, c, b, b)
+ my $howmany = pairs_get_keys( $pairs );  # $howmany is 5
+
+is( "@keys", "a b c b b",
+    "pairs_get_keys(), list" );
+is( $howmany, 5,
+    "pairs_get_keys(), scalar" );
+
+ @keys    = pairs_get_keys( $pairs, 'c', 'b', 'A' );  # @keys is (b, c, b, b)
+ $howmany = pairs_get_keys( $pairs, 'c', 'b', 'A' );  # $howmany is 4
+
+is( "@keys", "b c b b",
+    "pairs_get_keys(), list" );
+is( $howmany, 4,
+    "pairs_get_keys(), scalar" );
+
+}
+
+=head2 pairs_get_array( $pairs[, @keys] );
+
+(See C<< $pairs->get_array() >> above.)
+
+ my $pairs    = [{a=>1},{b=>2},{c=>3}];
+ my @array   = pairs_get_array( $pairs );  # @array is ({a=>1}, {b=>2}, {c=>3})
+ my $aref    = pairs_get_array( $pairs );  # $aref  is [{a=>1}, {b=>2}, {c=>3}]
+
+ @array = pairs_get_array( $pairs, 'c', 'b', 'A' );  # @array is ({b->2}, {c=>3})
+ $aref  = pairs_get_array( $pairs, 'c', 'b', 'A' );  # @aref  is [{b->2}, {c=>3}]
+
+=cut
+
+{
+ my $pairs    = [{a=>1},{b=>2},{c=>3}];
+ my @array   = pairs_get_array( $pairs );  # @array is ({a=>1}, {b=>2}, {c=>3})
+ my $aref    = pairs_get_array( $pairs );  # $aref  is [{a=>1}, {b=>2}, {c=>3}]
+
+is( Dumper(\@array), "[{'a' => 1},{'b' => 2},{'c' => 3}]",
+    "pairs_get_array(), list" );
+is( Dumper($aref), "[{'a' => 1},{'b' => 2},{'c' => 3}]",
+    "pairs_get_array(), scalar" );
+
+ @array = pairs_get_array( $pairs, 'c', 'b', 'A' );  # @array is ({b->2}, {c=>3})
+ $aref  = pairs_get_array( $pairs, 'c', 'b', 'A' );  # @aref  is [{b->2}, {c=>3}]
+
+is( Dumper(\@array), "[{'b' => 2},{'c' => 3}]",
+    "pairs_get_array(), list" );
+is( Dumper($aref), "[{'b' => 2},{'c' => 3}]",
+    "pairs_get_array(), scalar" );
+}
+
+=head2 pairs_exists( $pairs, $key );
+
+(See C<< $pairs->exists() >> above.)
+
+ my $bool = pairs_exists( $pairs, 'a' );
+
+=cut
+
+ my $pairs = [{a=>1},{b=>2},{c=>3}];
+ my $bool = pairs_exists( $pairs, 'a' );
+is( $bool, 1,
+    "pairs_exists()" );
+
+=head2 pairs_delete( $pairs, $key );
+
+(See C<< $pairs->delete() >> above.)
+
+ pairs_delete( $pairs, 'a' );
+
+=cut
+
+ pairs_delete( $pairs, 'a' );
+is( Dumper( $pairs ), "[{'b' => 2},{'c' => 3}]",
+    "pairs_delete()" );
+
+=head2 pairs_clear( $pairs );
+
+(See C<< $pairs->clear() >> above.)
+
+ pairs_clear( $pairs );
+
+=cut
+
+ pairs_clear( $pairs );
+is( Dumper( $pairs ), "[]",
+    "pairs_clear()" );
 
 }
 

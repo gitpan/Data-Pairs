@@ -18,27 +18,30 @@ duplicate keys.
  $pairs->set( a => 0 );
  $pairs->add( b2 => 2.5, 2 );  # insert at position 2 (between b and c)
  
- my $value  = $pairs->get_values( 'c' );    # 3
+ my($value) = $pairs->get_values( 'c' );    # 3      (if you just want one)
+ my @values = $pairs->get_values( 'b' );    # (2, 4) (one key, multiple values)
  my @keys   = $pairs->get_keys();           # (a, b, b2, c, b)
- my @values = $pairs->get_values();         # (0, 2, 2.5, 3, 4)
+    @values = $pairs->get_values();         # (0, 2, 2.5, 3, 4)
  my @subset = $pairs->get_values(qw(c b));  # (2, 3, 4) (values are data-ordered)
  
  # Tied style
- 
- my %pairs;
- # recommend saving an object reference, too.
- my $pairs = tie %pairs, 'Data::Pairs', [{a=>1},{b=>2},{c=>3},{b=>4}];
- 
- $pairs{ a } = 0;
- $pairs->add( b2 => 2.5, 2 );  # there's no tied hash equivalent
- 
- my $value  = $pairs{ c };
 
- # keys %pairs;    # not supported, use $pairs->get_keys()
- # values %pairs;  # not supported, use $pairs->get_values()
- # each %pairs;    # not supported, use $pairs->get_keys()/get_values()
- # @pairs{@array}; # slices not supported, use $pairs->get_values(@array)
-                   # or for(@array){ ... $pairs->getvalues($_) }
+ # Alas, because of duplicate keys, tying to a %hash is not supported.
+ 
+ # Non-OO style
+
+ use Data::Pairs ':ALL';
+ 
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4}];  # new-ish, but not blessed
+
+ pairs_set( $pairs, a => 0 );        # (pass pairs as first parameter)
+ pairs_add( $pairs, b2 => 2.5, 2 );  # insert at position 2 (between b and c)
+ 
+ my($value) = pairs_get_values( $pairs, 'c' );      # 3      (if you just want one)
+ my @values = pairs_get_values( $pairs, 'b' );      # (2, 4) (one key, multiple values)
+ my @keys   = pairs_get_keys( $pairs );             # (a, b, b2, c, b)
+    @values = pairs_get_values( $pairs );           # (0, 2, 2.5, 3, 4)
+ my @subset = pairs_get_values( $pairs, qw(c b) );  # (2, 3, 4) (values are data-ordered)
  
  # There are more methods/options, see below.
 
@@ -98,7 +101,7 @@ routine, but I wanted to see first how this implementation might work.
 
 =head1 VERSION
 
-Data::Pairs version 0.05
+Data::Pairs version 0.06
 
 =cut
 
@@ -106,10 +109,29 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 use Scalar::Util qw( reftype looks_like_number );
 use Carp;
+use Exporter qw( import );
+our @EXPORT_OK = qw(
+    pairs_set    pairs_get_values pairs_get_keys
+    pairs_exists pairs_delete     pairs_clear 
+    pairs_add    pairs_order      pairs_get_pos
+    pairs_get_pos_hash pairs_get_array
+    pairs_is_valid     pairs_errstr
+    );
+our %EXPORT_TAGS = (
+    STD => [qw( 
+    pairs_set    pairs_get_values pairs_get_keys
+    pairs_exists pairs_delete     pairs_clear )],
+    ALL => [qw(
+    pairs_set    pairs_get_values pairs_get_keys
+    pairs_exists pairs_delete     pairs_clear 
+    pairs_add    pairs_order      pairs_get_pos
+    pairs_get_pos_hash pairs_get_array
+    pairs_is_valid     pairs_errstr )],
+    );
 
 my $order;    # package global, see order() accessor
 our $errstr;  # error message
@@ -136,11 +158,11 @@ sub new {
     my( $class, $aref ) = @_;
     return bless [], $class unless $aref;
 
-    croak _errstr() unless _is_valid_pairs( $aref );
+    croak pairs_errstr() unless pairs_is_valid( $aref );
     bless $aref, $class;
 }
 
-sub _is_valid_pairs {
+sub pairs_is_valid {
     my( $aref ) = @_;
     unless( $aref and ref( $aref ) and reftype( $aref ) eq 'ARRAY' ) {
         $errstr = "Invalid pairs: Not an array reference";
@@ -160,7 +182,7 @@ sub _is_valid_pairs {
     return 1;  # is valid
 }
 
-sub _errstr {
+sub pairs_errstr {
     my $msg = $errstr;
     $errstr = "";
     $msg;  # returned
@@ -168,7 +190,7 @@ sub _errstr {
 
 #---------------------------------------------------------------------
 
-=head2 Data::Pairs->order();
+=head2 Data::Pairs->order( [$predefined_ordering | coderef] );
 
 When ordering is ON, new key/value pairs will be added in the
 specified order.  When ordering is OFF (the default), new pairs
@@ -214,6 +236,7 @@ at the object level.
 
 =cut
 
+*pairs_order = \&order;
 sub order {
     my( $class, $spec ) = @_;  # class not actually used ...
     return $order unless defined $spec;
@@ -271,6 +294,7 @@ Returns C<$value> (as a nod toward $hash{$key}=$value, which
 
 =cut
 
+*pairs_set = \&set;
 sub set {
     my( $self, $key, $value, $pos ) = @_;
     return unless defined $key;
@@ -291,9 +315,9 @@ sub set {
         return $value;
     }
 
-    my $found = $self->get_pos( $key );
+    my $found = pairs_get_pos( $self, $key );
     if( defined $found ) { $self->[ $found ] = $elem }
-    else                 { $self->_add_ordered( $key, $value ) }
+    else                 { pairs_add_ordered( $self, $key, $value ) }
 
     $value;  # returned
 }
@@ -314,7 +338,7 @@ number of values in the object.
  my @values  = $pairs->get_values();  # (1, 2, 3, 4, 5)
  my $howmany = $pairs->get_values();  # 5
 
-If multiple keys given, their values are returned in the order found
+If keys given, their values are returned in the order found
 in the object, not the order of the given keys.
 
 In scalar context, gives the number of values found, e.g.,
@@ -322,38 +346,25 @@ In scalar context, gives the number of values found, e.g.,
  @values  = $pairs->get_values( 'c', 'b' );  # (2, 3, 4, 5)
  $howmany = $pairs->get_values( 'c', 'b' );  # 4
 
-If only one key is given, I<first> value found for that key is
-returned in scalar context, all the values in list context.
+Note, unlike C<Data::Omap::get_values()>, because an object may have
+duplicate keys, this method behaves the same if given one key or
+many, e.g.,
 
- @values   = $pairs->get_values( 'b' );  # (2, 4, 5)
- my $value = $pairs->get_values( 'b' );  # 2
+ @values  = $pairs->get_values( 'b' );  # (2, 4, 5)
+ $howmany = $pairs->get_values( 'b' );  # 3
 
-Note, if you don't know if a key will have more than value, calling
-C<get_values()> in list context will ensure you get them all.
+Therefore, always call C<get_values()> in list context to get one
+or more values.
 
 =cut
 
+*pairs_get_values = \&get_values;
 sub get_values {
     my( $self, @keys ) = @_;
     return unless @$self;
 
-    if( @keys == 1 ) {  # most common case
-        my $wantkey = $keys[0];
-        my @ret;
-        for my $href ( @$self ) {
-            my ( $key ) = keys %$href;
-            if( $key eq $wantkey ) {
-                my ( $value ) = values %$href;
-                push @ret, $value;
-            }
-        }
-        return @ret if wantarray;
-        return $ret[0] if @ret;
-        return;  # key not found
-    }
-
-    elsif( @keys ) {
-        my ( %ret, @ret );
+    my @ret;
+    if( @keys ) {
         for my $href ( @$self ) {
             my ( $key ) = keys %$href;
             for ( @keys ) {
@@ -364,17 +375,14 @@ sub get_values {
                 }
             }
         }
-        return @ret;
     }
-
     else {
-        my @ret;
         for my $href ( @$self ) {
             my ( $value ) = values %$href;
             push @ret, $value;
         }
-        return @ret;
     }
+    return @ret;
 }
 
 #---------------------------------------------------------------------
@@ -400,6 +408,7 @@ Returns C<$value>.
 
 =cut
 
+*pairs_add = \&add;
 sub add {
     my( $self, $key, $value, $pos ) = @_;
     return unless defined $key;
@@ -410,7 +419,7 @@ sub add {
         splice @$self, $pos, 0, $elem;
     }
     else {
-        $self->_add_ordered( $key, $value );
+        pairs_add_ordered( $self, $key, $value );
     }
 
     $value;  # returned
@@ -418,7 +427,7 @@ sub add {
 
 #---------------------------------------------------------------------
 
-=head2 $pairs->_add_ordered( $key => $value );
+=head2 pairs_add_ordered( $pairs, $key => $value );
 
 Private routine used by C<set()> and C<add()>; should not be called
 directly.
@@ -432,7 +441,7 @@ Has no defined return value.
 
 =cut
 
-sub _add_ordered {
+sub pairs_add_ordered {
     my( $self, $key, $value ) = @_;
     my $elem = { $key => $value };
 
@@ -485,6 +494,7 @@ Returns C<()/undef> if no key given, no keys found, or object is empty.
 
 =cut
 
+*pairs_get_pos = \&get_pos;
 sub get_pos {
     my( $self, $wantkey ) = @_;
     return unless $wantkey;
@@ -525,6 +535,7 @@ Returns C<undef/()> if object is empty.
 
 =cut
 
+*pairs_get_pos_hash = \&get_pos_hash;
 sub get_pos_hash {
     my( $self, @keys ) = @_;
     return unless @$self;
@@ -573,6 +584,7 @@ order found in the object, e.g.,
 
 =cut
 
+*pairs_get_keys = \&get_keys;
 sub get_keys {
     my( $self, @keys ) = @_;
     return unless @$self;
@@ -624,6 +636,7 @@ are references, the references would be copied, not the referents).
 
 =cut
 
+*pairs_get_array = \&get_array;
 sub get_array {
     my( $self, @keys ) = @_;
     return unless @$self;
@@ -650,52 +663,19 @@ sub get_array {
 
 #---------------------------------------------------------------------
 
-=head2 $pairs->firstkey();
-
-This routine would support the tied hash FIRSTKEY method.  However,
-since there isn't a way for C<nextkey()> to reliably get the next key
-(because of duplicates), the tied implementation does not support
-operations that rely on FIRSTKEY/NEXTKEY.
-
-=cut
-
-sub firstkey {
-    croak "This operation is not supported.  Try using the corresponding OO method.";
-}
-
-#---------------------------------------------------------------------
-
-=head2 $pairs->nextkey( $lastkey );
-
-This routine would support the tied hash NEXTKEY method.  However,
-because of duplicates, there isn't a way to reliably get the next key
-based solely on the value of C<$lastkey>.  Therefore, the tied
-implementation does not support operations that rely on
-FIRSTKEY/NEXTKEY.
-
-=cut
-
-sub nextkey {
-    croak "This operation is not supported.  Try using the corresponding OO method.";
-}
-
-#---------------------------------------------------------------------
-
 =head2 $pairs->exists( $key );
 
 Accepts one key.
 
 Returns true if key is found in object, false if not.
 
-This routine supports the tied hash EXISTS method, but may reasonably
-be called directly, too.
-
 =cut
 
+*pairs_exists = \&exists;
 sub exists {
     my( $self, $key ) = @_;
     return unless @$self;
-    return defined $self->get_pos( $key );
+    return defined pairs_get_pos( $self, $key );
 }
 
 #---------------------------------------------------------------------
@@ -713,12 +693,9 @@ times to delete them all.
 
 Returns the value from the deleted pair.
 
-This routine supports the tied hash DELETE method, but may be called
-directly, too.  C<$pos> is not passed in the tied hash implementation,
-so the first matching key/value pair will be deleted in every case.
-
 =cut
 
+*pairs_delete = \&delete;
 sub delete {
     my( $self, $key, $pos ) = @_;
     return unless defined $key;
@@ -729,7 +706,7 @@ sub delete {
         return unless $foundkey eq $key;
     }
     else {
-        $pos = $self->get_pos( $key );
+        $pos = pairs_get_pos( $self, $key );
         return unless defined $pos;
     }
 
@@ -746,132 +723,162 @@ Expects no parameters.  Removes all key/value pairs from the object.
 
 Returns an empty list.
 
-This routine supports the tied hash CLEAR method, but may be called
-directly, too.
-
 =cut
 
+*pairs_clear = \&clear;
 sub clear {
     my( $self ) = @_;
     @$self = ();
 }
 
-#---------------------------------------------------------------------
-# perltie methods
-#---------------------------------------------------------------------
-
-# TIEHASH classname, LIST
-# This is the constructor for the class. That means it is expected to
-# return a blessed reference through which the new object (probably but
-# not necessarily an anonymous hash) will be accessed.
-
-sub TIEHASH {
-    my $class = shift;
-    $class->new( @_ );
-}
-
-#---------------------------------------------------------------------
-# FETCH this, key
-# This method will be triggered every time an element in the tied hash
-# is accessed (read). 
-
-sub FETCH {
-    my $self = shift;
-    $self->get_values( @_ );
-}
-
-#---------------------------------------------------------------------
-# STORE this, key, value
-# This method will be triggered every time an element in the tied hash
-# is set (written). 
-
-sub STORE {
-    my $self = shift;
-    $self->set( @_ );
-}
-
-#---------------------------------------------------------------------
-# DELETE this, key
-# This method is triggered when we remove an element from the hash,
-# typically by using the delete() function.
-# If you want to emulate the normal behavior of delete(), you should
-# return whatever FETCH would have returned for this key. 
-
-sub DELETE {
-    my $self = shift;
-    $self->delete( @_ );
-}
-
-#---------------------------------------------------------------------
-# CLEAR this
-# This method is triggered when the whole hash is to be cleared,
-# usually by assigning the empty list to it.
-
-sub CLEAR {
-    my $self = shift;
-    $self->clear();
-}
-
-#---------------------------------------------------------------------
-# EXISTS this, key
-# This method is triggered when the user uses the exists() function
-# on a particular hash.
-
-sub EXISTS {
-    my $self = shift;
-    $self->exists( @_ );
-}
-
-#---------------------------------------------------------------------
-# FIRSTKEY this
-# This method will be triggered when the user is going to iterate
-# through the hash, such as via a keys() or each() call.
-
-sub FIRSTKEY {
-    my $self = shift;
-    $self->firstkey();  # note, will croak
-}
-
-#---------------------------------------------------------------------
-# NEXTKEY this, lastkey
-# This method gets triggered during a keys() or each() iteration.
-# It has a second argument which is the last key that had been accessed.
-
-sub NEXTKEY {
-    my $self = shift;
-    $self->nextkey( @_ );  # note, will croak
-}
-
-#---------------------------------------------------------------------
-# SCALAR this
-# This is called when the hash is evaluated in scalar context.
-# In order to mimic the behavior of untied hashes, this method should
-# return a false value when the tied hash is considered empty.
-
-sub SCALAR {
-    my $self = shift;
-    $self->get_keys();  # number of keys or undef (scalar context)
-}
-
-#---------------------------------------------------------------------
-# UNTIE this
-# This is called when untie occurs. See "The untie Gotcha".
-
-# sub UNTIE {
-# }
-
-#---------------------------------------------------------------------
-# DESTROY this
-# This method is triggered when a tied hash is about to go out of scope.
-
-# sub DESTROY {
-# }
-
-#---------------------------------------------------------------------
-
 1;  # 'use module' return value
 
 __END__
+
+=head1 NON-OO STYLE
+
+Pairs, ordered mappings with duplicate keys (as defined here), is an
+array of single-key hashes.  It is possible to manipulate a pairs
+ordered mapping directly without first blessing it with C<new()>.
+Most methods have a corresponding exportable subroutine named with
+the prefix, C<pairs_>, e.g., C<pairs_set()>, C<pairs_get_keys()>,
+etc.
+
+To call these subroutines, pass the array reference as the first
+parameter, e.g., instead of doing C<< $pairs->set( a => 1) >>, do C<<
+pairs_set( $pairs, a => 1) >>.
+
+=head2 Exporting
+
+Nothing is exported by default.  All subroutines may be exported
+using C<:ALL>, e.g.,
+
+ use Data::Pairs ':ALL';
+
+They are shown below.
+
+A subset may be exported using C<:STD>, e.g.,
+
+ use Data::Pairs ':STD';
+
+This subset includes
+C<pairs_set()>
+C<pairs_get_values()>
+C<pairs_get_keys()>
+C<pairs_exists()>
+C<pairs_delete()>
+C<pairs_clear()>
+
+=head2 C<new> without C<new()>
+
+To create a pairs ordered mapping from scratch, simply assign an
+empty array ref, e.g.,
+
+ my $pairs = [];
+
+=head2 pairs_order( $pairs[, $predefined_ordering | coderef] );
+
+(See C<< Data::Pairs->order() >> above.)
+
+ pairs_order( $pairs, 'na' );   # numeric ascending
+ pairs_order( $pairs, 'nd' );   # numeric descending
+ pairs_order( $pairs, 'sa' );   # string  ascending
+ pairs_order( $pairs, 'sd' );   # string  descending
+ pairs_order( $pairs, 'sna' );  # string/numeric ascending
+ pairs_order( $pairs, 'snd' );  # string/numeric descending
+ pairs_order( $pairs, sub{ int($_[0]/100) < int($_[1]/100) } );  # code
+
+=head2 pairs_set( $pairs, $key => $value[, $pos] );
+
+(See C<< $pairs->set() >> above.)
+
+ my $pairs = [{a=>1},{b=>2}];
+ pairs_set( $pairs, c => 3, 0 );  # pairs is now [{c=>3},{b=>2}]
+
+=head2 pairs_get_values( $pairs[, $key[, @keys]] );
+
+(See C<< $pairs->get_values() >> above.)
+
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4},{b=>5}];
+ my @values  = pairs_get_values( $pairs );  # (1, 2, 3, 4, 5)
+ my $howmany = pairs_get_values( $pairs );  # 5
+ 
+ @values  = pairs_get_values( $pairs, 'c', 'b' );  # (2, 3, 4, 5)
+ $howmany = pairs_get_values( $pairs, 'c', 'b' );  # 4
+
+ @values  = pairs_get_values( $pairs, 'b' );  # (2, 4, 5)
+ $howmany = pairs_get_values( $pairs, 'b' );  # 3
+ 
+=head2 pairs_add( $pairs, $key => $value[, $pos] );
+
+(See C<< $pairs->add() >> above.)
+
+ my $pairs = [{a=>1},{b=>2}];
+ pairs_add( $pairs, c => 3, 1 );  # pairs is now [{a=>1},{c=>3},{b=>2}]
+
+=head2 pairs_get_pos( $pairs, $key );
+
+(See C<< $pairs->get_pos() >> above.)
+
+ my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4}];
+ my @pos   = pairs_get_pos( $pairs, 'c' );  # (2)
+ my $pos   = pairs_get_pos( $pairs, 'c' );  # 2
+ @pos   = pairs_get_pos( $pairs, 'b' );  # (1, 3)
+ $pos   = pairs_get_pos( $pairs, 'b' );  # [1, 3]
+
+=head2 pairs_get_pos_hash( $pairs[, @keys] );
+
+(See C<< $pairs->get_pos_hash() >> above.)
+
+ my $pairs    = [{a=>1},{b=>2},{c=>3},{b=>4}];
+ my %pos      = pairs_get_pos_hash( $pairs, 'c', 'b' );  # %pos      is (b=>[1,3],c=>[2])
+ my $pos_href = pairs_get_pos_hash( $pairs, 'c', 'b' );  # $pos_href is {b=>[1,3],c=>[2]}
+
+=head2 pairs_get_keys( $pairs[, @keys] );
+
+(See C<< $pairs->get_keys() >> above.)
+
+ my $pairs    = [{a=>1},{b=>2},{c=>3},{b=>4},{b=>5}];
+ my @keys    = pairs_get_keys( $pairs );  # @keys is (a, b, c, b, b)
+ my $howmany = pairs_get_keys( $pairs );  # $howmany is 5
+
+ @keys    = pairs_get_keys( $pairs, 'c', 'b', 'A' );  # @keys is (b, c, b, b)
+ $howmany = pairs_get_keys( $pairs, 'c', 'b', 'A' );  # $howmany is 4
+
+=head2 pairs_get_array( $pairs[, @keys] );
+
+(See C<< $pairs->get_array() >> above.)
+
+ my $pairs    = [{a=>1},{b=>2},{c=>3}];
+ my @array   = pairs_get_array( $pairs );  # @array is ({a=>1}, {b=>2}, {c=>3})
+ my $aref    = pairs_get_array( $pairs );  # $aref  is [{a=>1}, {b=>2}, {c=>3}]
+
+ @array = pairs_get_array( $pairs, 'c', 'b', 'A' );  # @array is ({b->2}, {c=>3})
+ $aref  = pairs_get_array( $pairs, 'c', 'b', 'A' );  # @aref  is [{b->2}, {c=>3}]
+
+=head2 pairs_exists( $pairs, $key );
+
+(See C<< $pairs->exists() >> above.)
+
+ my $bool = pairs_exists( $pairs, 'a' );
+
+=head2 pairs_delete( $pairs, $key );
+
+(See C<< $pairs->delete() >> above.)
+
+ pairs_delete( $pairs, 'a' );
+
+=head2 pairs_clear( $pairs );
+
+(See C<< $pairs->clear() >> above.)
+
+ pairs_clear( $pairs );
+
+Or simply:
+
+ @$pairs = ();
+
+=cut
 
 =head1 SEE ALSO
 
