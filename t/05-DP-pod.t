@@ -91,7 +91,7 @@ SYNOPSIS_nonoo: {
 
 =cut
  
- use Data::Omap ':ALL';
+ use Data::Pairs ':ALL';
 
  my $pairs = [{a=>1},{b=>2},{c=>3},{b=>4}];  # new-ish, but not blessed
 

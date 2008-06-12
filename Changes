@@ -1,5 +1,8 @@
 Revision history for Perl extension Data::Pairs.
 
+0.07  Thu Jun 12 08:11:19 EDT 2008
+    - Fixed bug in test, using wrong class (per cpan tests)
+
 0.06  Tue Jun 10 16:41:17 EDT 2008
     - added exporting of non-oo aliases for methods
     - added tests to MANIFEST (and removed some for tie)

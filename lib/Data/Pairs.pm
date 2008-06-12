@@ -101,7 +101,7 @@ routine, but I wanted to see first how this implementation might work.
 
 =head1 VERSION
 
-Data::Pairs version 0.06
+Data::Pairs version 0.07
 
 =cut
 
@@ -109,7 +109,7 @@ use 5.008003;
 use strict;
 use warnings;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 use Scalar::Util qw( reftype looks_like_number );
 use Carp;
